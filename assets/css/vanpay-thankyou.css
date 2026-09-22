@@ -1,0 +1,29 @@
+/* Vanpay waiting/paid panel on the order-received page.
+   Visual styling comes from the theme's .yourpropfirm-dashboard / tw-*
+   utilities — only the waiting<->paid state toggling lives here. */
+
+/* State visibility: the .vanpay-paid modifier flips waiting -> paid. */
+.vanpay-pay-panel .vanpay-state-paid {
+	display: none;
+}
+
+.vanpay-pay-panel.vanpay-paid .vanpay-state-paid {
+	display: block;
+}
+
+.vanpay-pay-panel.vanpay-paid .vanpay-state-waiting {
+	display: none;
+}
+
+.vanpay-polling-note {
+	opacity: 0.7;
+}
+
+.vanpay-popup-hint {
+	font-size: 0.9em;
+	opacity: 0.8;
+}
+
+.yourpropfirm-dashboard.vanpay-pay-panel + .yourpropfirm-dashboard {
+	display: none !important;
+}

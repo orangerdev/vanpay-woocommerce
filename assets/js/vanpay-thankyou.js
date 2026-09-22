@@ -1,5 +1,6 @@
 /**
- * Vanpay waiting panel: polls the order status endpoint and flips the panel
+ * Vanpay waiting panel: opens the Vanpay checkout in a new tab once as a
+ * first attempt, then polls the order status endpoint and flips the panel
  * to its "paid" state once the payment is confirmed.
  */
 ( function () {
@@ -10,8 +11,9 @@
 		return;
 	}
 
-	var statusUrl = panel.getAttribute( 'data-status-url' );
-	var interval  = parseInt( panel.getAttribute( 'data-interval' ), 10 ) || 5000;
+	var statusUrl   = panel.getAttribute( 'data-status-url' );
+	var checkoutUrl = panel.getAttribute( 'data-checkout-url' );
+	var interval    = parseInt( panel.getAttribute( 'data-interval' ), 10 ) || 5000;
 	if ( ! statusUrl || ! window.fetch ) {
 		return;
 	}
@@ -21,22 +23,42 @@
 	var timer       = null;
 	var done        = false;
 
+	// First-visit initiative: try to open the Vanpay checkout in a new tab.
+	// Popup blockers may refuse it — the button in the panel stays the
+	// primary path, and a hint is shown when the attempt was blocked.
+	function autoOpenCheckout() {
+		if ( ! checkoutUrl ) {
+			return;
+		}
+
+		var storageKey = 'vanpay_opened_' + statusUrl;
+		try {
+			if ( '1' === window.sessionStorage.getItem( storageKey ) ) {
+				return;
+			}
+			window.sessionStorage.setItem( storageKey, '1' );
+		} catch ( e ) {
+			// Storage unavailable (private mode etc.): still attempt once.
+		}
+
+		var popup = window.open( checkoutUrl, '_blank' );
+		if ( popup ) {
+			popup.opener = null;
+		} else {
+			var hint = panel.querySelector( '.vanpay-popup-hint' );
+			if ( hint ) {
+				hint.hidden = false;
+			}
+		}
+	}
+
 	function markPaid() {
 		if ( done ) {
 			return;
 		}
 		done = true;
 
-		var waiting = panel.querySelector( '.vanpay-state-waiting' );
-		var paid    = panel.querySelector( '.vanpay-state-paid' );
-		if ( waiting ) {
-			waiting.style.display = 'none';
-		}
-		if ( paid ) {
-			paid.style.display = '';
-		}
-		panel.style.borderColor = '#c3e6cb';
-		panel.style.background  = '#f0fff4';
+		panel.classList.add( 'vanpay-paid' );
 
 		// Hook point for analytics/tracking integrations.
 		document.dispatchEvent( new CustomEvent( 'vanpay:paid' ) );
@@ -71,6 +93,8 @@
 				// Transient network error: keep polling.
 			} );
 	}
+
+	autoOpenCheckout();
 
 	timer = window.setInterval( poll, interval );
 
