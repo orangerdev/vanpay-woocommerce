@@ -31,6 +31,59 @@ class Vanpay_Webhook_Controller {
 				'permission_callback' => '__return_true',
 			)
 		);
+	
+		// Lightweight status endpoint polled by the thank-you waiting panel.
+		// Authorized by the WooCommerce order key (the same capability token
+		// that grants access to the order-received page). No PII is returned.
+		register_rest_route(
+			'vanpay/v1',
+			'/order-status/(?P<order_id>\\d+)',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'order_status' ),
+				'permission_callback' => '__return_true',
+				'args'                => array(
+					'order_id' => array(
+						'type'     => 'integer',
+						'required' => true,
+					),
+					'key'      => array(
+						'type'     => 'string',
+						'required' => true,
+					),
+				),
+			)
+		);
+	}
+
+	/**
+	 * Order payment status for the waiting panel.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function order_status( WP_REST_Request $request ) {
+		$order = wc_get_order( absint( $request['order_id'] ) );
+		$key   = (string) $request['key'];
+
+		if (
+			! $order instanceof WC_Order ||
+			'vanpay' !== $order->get_payment_method() ||
+			'' === $key ||
+			! hash_equals( $order->get_order_key(), $key )
+		) {
+			return new WP_REST_Response( array( 'error' => 'forbidden' ), 403 );
+		}
+
+		$response = new WP_REST_Response(
+			array(
+				'paid'   => $order->is_paid(),
+				'status' => $order->get_status(),
+			),
+			200
+		);
+		$response->header( 'Cache-Control', 'no-store' );
+		return $response;
 	}
 
 	/**

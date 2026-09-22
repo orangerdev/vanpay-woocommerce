@@ -14,7 +14,10 @@ Accept payments through the Vanpay hosted crypto checkout.
 
 This plugin adds Vanpay (https://vanpay.io) as a WooCommerce payment gateway.
 
-* The customer is redirected to the Vanpay hosted checkout (checkout.vanpay.io) to pay.
+* Two checkout flows, selectable in the gateway settings: a waiting page on
+  the store (the customer opens the Vanpay checkout in a new tab and the page
+  updates live once the payment is confirmed — recommended), or a direct
+  redirect to the Vanpay hosted checkout (checkout.vanpay.io).
 * Orders are placed on-hold while awaiting payment and confirmed by a signed
   `payment.paid` webhook (Standard Webhooks HMAC-SHA256) PLUS an authenticated
   re-read of the payment from the Vanpay API before fulfilment.
@@ -31,7 +34,8 @@ Important notes:
 
 * Vanpay has NO test/sandbox keys — every payment is live.
 * Vanpay checkout does not redirect the customer back to the store; the order
-  is confirmed asynchronously.
+  is confirmed asynchronously. The waiting-page flow exists to give the
+  customer an on-store confirmation despite this.
 * The Vanpay API has no refund capability, so the gateway does not offer refunds.
 * On a local development site webhooks cannot arrive from the internet; the
   reconciliation job (or the "Check payment status" button on the order screen)

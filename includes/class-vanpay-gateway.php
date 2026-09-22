@@ -89,6 +89,17 @@ class Vanpay_Gateway extends WC_Payment_Gateway {
 				),
 				'desc_tip'    => true,
 			),
+			'checkout_flow'     => array(
+				'title'       => __( 'Checkout flow', 'vanpay-woocommerce' ),
+				'type'        => 'select',
+				'description' => __( 'Waiting page: the customer lands on your order-received page, opens the Vanpay checkout in a new tab, and the page updates live once the payment is confirmed (conversion tracking can fire on-site). Direct redirect: the customer is sent straight to checkout.vanpay.io and does not return to the store — confirmation happens by email only.', 'vanpay-woocommerce' ),
+				'default'     => 'waiting',
+				'options'     => array(
+					'waiting'  => __( 'Waiting page on the store (recommended)', 'vanpay-woocommerce' ),
+					'redirect' => __( 'Direct redirect to Vanpay', 'vanpay-woocommerce' ),
+				),
+				'desc_tip'    => false,
+			),
 			'paid_order_status' => array(
 				'title'       => __( 'Order status after payment', 'vanpay-woocommerce' ),
 				'type'        => 'select',
@@ -324,7 +335,7 @@ class Vanpay_Gateway extends WC_Payment_Gateway {
 		if ( '' !== $checkout_url && $stored_hash === $request_hash ) {
 			return array(
 				'result'   => 'success',
-				'redirect' => $checkout_url,
+				'redirect' => $this->get_checkout_redirect( $order, $checkout_url ),
 			);
 		}
 
@@ -397,8 +408,22 @@ class Vanpay_Gateway extends WC_Payment_Gateway {
 
 		return array(
 			'result'   => 'success',
-			'redirect' => $checkout_url,
+			'redirect' => $this->get_checkout_redirect( $order, $checkout_url ),
 		);
+	}
+
+	/**
+	 * Pick the post-checkout destination for the configured flow.
+	 *
+	 * @param WC_Order $order        Order.
+	 * @param string   $checkout_url Vanpay checkout URL.
+	 * @return string
+	 */
+	private function get_checkout_redirect( WC_Order $order, string $checkout_url ) {
+		if ( 'redirect' === $this->get_option( 'checkout_flow', 'waiting' ) ) {
+			return $checkout_url;
+		}
+		return $this->get_return_url( $order );
 	}
 
 	/**
@@ -408,7 +433,16 @@ class Vanpay_Gateway extends WC_Payment_Gateway {
 	 */
 	public function thankyou_page( $order_id ) {
 		$order = wc_get_order( $order_id );
-		if ( ! $order || ! $order->has_status( 'on-hold' ) ) {
+		if ( ! $order ) {
+			return;
+		}
+
+		if ( $order->is_paid() || ! $order->has_status( 'on-hold' ) ) {
+			if ( $order->is_paid() ) {
+				echo '<section class="vanpay-pay-panel vanpay-paid" style="margin:1.5em 0;padding:1em;border:1px solid #c3e6cb;border-radius:4px;background:#f0fff4;">';
+				echo '<p style="margin:0;"><strong>&#10004; ' . esc_html__( 'Payment received — your order is being processed.', 'vanpay-woocommerce' ) . '</strong></p>';
+				echo '</section>';
+			}
 			return;
 		}
 
@@ -417,10 +451,33 @@ class Vanpay_Gateway extends WC_Payment_Gateway {
 			return;
 		}
 
-		echo '<section class="vanpay-pay-now" style="margin:1.5em 0;">';
-		echo '<p>' . esc_html__( 'Your order is awaiting payment. If you have not completed it yet, or the payment window was closed, you can continue here:', 'vanpay-woocommerce' ) . '</p>';
-		echo '<p><a class="button" href="' . esc_url( $checkout_url ) . '">' . esc_html__( 'Complete your payment', 'vanpay-woocommerce' ) . '</a></p>';
-		echo '<p>' . esc_html__( 'Your order is updated automatically once the payment is confirmed.', 'vanpay-woocommerce' ) . '</p>';
+		$status_url = rest_url(
+			sprintf( 'vanpay/v1/order-status/%d', $order->get_id() )
+		);
+
+		wp_enqueue_script(
+			'vanpay-thankyou',
+			plugins_url( 'assets/js/vanpay-thankyou.js', VANPAY_WC_PLUGIN_FILE ),
+			array(),
+			VANPAY_WC_VERSION,
+			true
+		);
+
+		echo '<section class="vanpay-pay-panel" id="vanpay-pay-panel" style="margin:1.5em 0;padding:1em;border:1px solid #dcdcde;border-radius:4px;"';
+		echo ' data-status-url="' . esc_url( add_query_arg( 'key', $order->get_order_key(), $status_url ) ) . '"';
+		echo ' data-interval="5000">';
+
+		echo '<div class="vanpay-state-waiting">';
+		echo '<p><strong>' . esc_html__( 'Complete your payment', 'vanpay-woocommerce' ) . '</strong></p>';
+		echo '<p>' . esc_html__( 'Finish your payment in the Vanpay window. This page updates automatically as soon as the payment is confirmed — keep it open.', 'vanpay-woocommerce' ) . '</p>';
+		echo '<p><a class="button" href="' . esc_url( $checkout_url ) . '" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Continue to Vanpay checkout', 'vanpay-woocommerce' ) . ' &#8599;</a></p>';
+		echo '<p class="vanpay-polling-note" style="opacity:.7;">&#8987; ' . esc_html__( 'Waiting for payment confirmation…', 'vanpay-woocommerce' ) . '</p>';
+		echo '</div>';
+
+		echo '<div class="vanpay-state-paid" style="display:none;">';
+		echo '<p style="margin:0;"><strong>&#10004; ' . esc_html__( 'Payment received — your order is being processed.', 'vanpay-woocommerce' ) . '</strong></p>';
+		echo '</div>';
+
 		echo '</section>';
 	}
 
